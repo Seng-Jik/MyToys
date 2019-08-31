@@ -40,6 +40,11 @@ let (<+>) (a:'a parser) (b:'b parser) : ('a * 'b) parser =
             Some ((result1,result2),reminder2)
         | None -> None
     | None -> None
+
+let (<@+>) a b = a <+> b >> Parsed.fst
+
+let (<+@>) a b = a <+> b >> Parsed.snd
+
     
 let rec oneOrMore p = 
     p
@@ -95,8 +100,8 @@ let whitespace = characterInCondition (fun x -> x = ' ' || x = '\t') >> Parsed.i
 
 
 let quotedString = 
-    character '\"' <+> zeroOrMore (characterInCondition (fun x -> x <> '\"')) <+> character '\"'
-    >> Parsed.fst >> Parsed.snd >> Parsed.map List.toArray >> Parsed.map System.String
+    character '\"' <+@> zeroOrMore (characterInCondition (fun x -> x <> '\"')) <@+> character '\"'
+    >> Parsed.map List.toArray >> Parsed.map System.String
 
 assert (quotedString ("\"Hello Joe!\"".ToCharArray()) = Some("Hello Joe!",[||]))
 
@@ -134,11 +139,7 @@ module XMLParser =
             children = []
             tag = x |> fst |> snd })
     let singleElement =
-        elementHeadBody <+> zeroOrMore whitespace <+> character '/' <+> zeroOrMore whitespace <+> character '>'
-        >> Parsed.fst
-        >> Parsed.fst
-        >> Parsed.fst
-        >> Parsed.fst
+        elementHeadBody <@+> zeroOrMore whitespace <@+> character '/' <@+> zeroOrMore whitespace <@+> character '>'
     
     printfn "%A" (attributes (" stupid    = \"oh my gooooood!\" super=\"fff\"".ToCharArray()))
     printfn "%A" (singleElement ("<super xx= \"abc\" yy = \"super\" />".ToCharArray()))
@@ -200,9 +201,7 @@ module Brainfuck =
         | Choice2Of2 ()-> [])
 
     let whileParser (brainfuckParser:Instruction list parser) : Instruction parser =
-        character '[' <+> brainfuckParser <+> character ']'
-        >> Parsed.fst
-        >> Parsed.snd
+        character '[' <+@> brainfuckParser <@+> character ']'
         >> Parsed.map While
         
 
