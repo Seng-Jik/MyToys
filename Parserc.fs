@@ -167,3 +167,63 @@ module Tests =
     assert(Some([();();()],[||]) = zeroOrMore parse_ha ("hahaha".ToCharArray()))
     assert(Some([],"ahah".ToCharArray()) = zeroOrMore parse_ha ("ahah".ToCharArray()))
     assert(Some([],[||]) = zeroOrMore parse_ha [||])
+
+module Brainfuck =
+
+    type Instruction =
+    | Inc
+    | Dec
+    | PInc
+    | PDec
+    | While of Instruction list
+    | Input
+    | Output
+
+    let ins ch target =
+        character ch >> Parsed.map (fun _ -> target)
+        
+    let simpleInstruction =
+        ins '+' Inc <|>
+        ins '-' Dec <|>
+        ins '>' PInc <|>
+        ins '<' PDec <|>
+        ins ',' Input <|>
+        ins '.' Output
+        
+    let dirtySimpleInstruction =
+        simpleInstruction <||||> (characterInCondition (fun x-> x<>'['&&x<>']') >> Parsed.ignore)
+
+    let cleanInstructions (instructions : Choice<Instruction,unit> list) : Instruction list =
+        instructions
+        |> List.collect (function
+        | Choice1Of2 x -> [x]
+        | Choice2Of2 ()-> [])
+
+    let whileParser (brainfuckParser:Instruction list parser) : Instruction parser =
+        character '[' <+> brainfuckParser <+> character ']'
+        >> Parsed.fst
+        >> Parsed.snd
+        >> Parsed.map While
+        
+
+    let parseSingleInstruction (brainfuckParser:Instruction list parser) (input:str) : Choice<Instruction,unit> parsed =
+        let whileParser = whileParser brainfuckParser
+        let parser = whileParser <||||> dirtySimpleInstruction
+        parser input
+        |> Parsed.map (function
+        | Choice1Of2 x -> Choice1Of2 x
+        | Choice2Of2 x -> x)
+
+    let rec parseBrainfuck (input:str) : Instruction list parsed =
+        let single = parseSingleInstruction parseBrainfuck
+
+        input
+        |> zeroOrMore single
+        |> Parsed.map cleanInstructions
+        
+        
+    
+
+    let bf = "[<----[][<<[++>]<<[]]--<------>>-]<<[>[>+>+<<-]>>[<<+>>-]<<<-]>>>++++++[<++++++++>-],<.>."
+    printfn "%A" (parseBrainfuck (bf.ToCharArray()))
+        
