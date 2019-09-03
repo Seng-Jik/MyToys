@@ -103,7 +103,7 @@ let bigLetter = characterInRange 'A' 'Z'
 let letter = bigLetter <|> littleLetter
 let numberCharacter = characterInRange '0' '9'
 
-let whitespace = characterInCondition (fun x -> x = ' ' || x = '\t' || x = '\010') >> Parsed.ignore
+let whitespace = characterInCondition (fun x -> x = ' ' || x = '\t' || x = '\010' || x = '\n' || x = '\r') >> Parsed.ignore
 
 
 let quotedString = 
@@ -149,6 +149,7 @@ module XMLParser =
         })
     let singleElement =
         elementHeadBody <@+> zeroOrMore whitespace <@+> character '/' <@+> zeroOrMore whitespace <@+> character '>'
+        |> pred (fun x -> x.tag.StartsWith "/" |> not)
         
     let startElement =
         elementHeadBody <@+> zeroOrMore whitespace <@+> character '>'
@@ -157,40 +158,37 @@ module XMLParser =
         character '<' <+@> zeroOrMore whitespace <+@> character '/' <+@> zeroOrMore whitespace <+@> identifier <@+> character '>'
         |> pred ((=) expectedName)
         
-    let parentElement (elementParser : XMLElement parser) input : XMLElement parsed =
-        input
-        |> (startElement
-        >>> (fun first ->
-            printfn "%A" first
-            let res : XMLElement list parsed=
-                (zeroOrMore elementParser <@+> endElement first.tag) input
-            match res with
-            | None -> None
-            | Some (ls,reminder) ->
-                printfn "%A" first
-                Some({first with children = ls},reminder)))
-
-    let rec element input =
-        let res =
-            input 
-            |> (singleElement <|> parentElement element)
-        res
-        
     let whitespaceWrapper parser =
         zeroOrMore whitespace <+@> parser <@+> zeroOrMore whitespace
+
+    let rec parentElement input : XMLElement parsed =
+        input 
+        |> (startElement
+        >>> (fun x -> 
+            zeroOrMore (whitespaceWrapper element) <@+> zeroOrMore whitespace <@+> endElement x.tag
+            >> Parsed.map (fun ls -> { x with children = ls })))
+
+    and element input =
+        let res =
+            input 
+            |> (singleElement <|> parentElement)
+        res
+        
+
         
     let parseXML =
         zeroOrMore (whitespaceWrapper element)
         
-    //parseXML ("<super><wcnmb/><nmsl/></super>".ToCharArray())
-    //|> printfn "%A"
-    
+
     let xml1 = """<top label="Top">
+    <semi-bottom label="Bottom"/>
+    <middle>
+        <bottom label="Another bottom"/>
+    </middle>
         </top>"""
         
-    parentElement element (xml1.ToCharArray())
+    parentElement (xml1.ToCharArray())
     |> printfn "%A"
-    
     
     
     (*printfn "%A" (attributes (" stupid    = \"oh my gooooood!\" super=\"fff\"".ToCharArray()))
