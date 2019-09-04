@@ -276,3 +276,52 @@ module Brainfuck =
     let bf = "[<----[][<<[++>]<<[]]--<------>>-]<<[>[>+>+<<-]>>[<<+>>-]<<<-]>>>++++++[<++++++++>-],<.>."
     printfn "%A" (parseBrainfuck (bf.ToCharArray()))
         
+module Expression =
+        
+    type Expr =
+    | Atom of int
+    | Operator of Expr * char * Expr
+
+    let parseNumber =
+        oneOrMore numberCharacter
+        >> Parsed.map (List.toArray >> System.String >> int)
+        >> Parsed.map Atom
+        
+    let parseOperator0 =
+        characterInCondition (fun x -> x = '*' || x = '/')
+    let parseOperator1 =
+        characterInCondition (fun x -> x = '+' || x = '-')
+
+    let chainl1 (p:Expr parser) (op:char parser) input : Expr parsed =
+        let rec rest x rem : Expr parsed = 
+            match op rem with
+            | None -> Some(x,rem)
+            | Some (f,rem2) -> 
+                let b,rem3 = p rem2 |> Option.get
+                match (rest (Operator(x,f,b)) rem3) with
+                | Some x -> Some x
+                | None ->  Some (Operator(x,f,b) ,rem3)
+        match p input with
+        | None -> None
+        | Some (a,rem) ->
+            rest a rem
+
+    let rec atom i = i |> (parseNumber <|> (character '(' <+@> adds <@+> character ')'))
+    and muls = chainl1 atom parseOperator0
+    and adds = chainl1 muls parseOperator1
+        
+    let rec eval = function
+    | Atom i -> i
+    | Operator (x,o,y) ->
+        (eval x,eval y)
+        ||> match o with
+            | '+' -> (+)
+            | '-' -> (-)
+            | '*' -> (*)
+            | '/' -> (/)
+            | _ -> failwith "1145141919810"
+        
+    "(1+1)*1/1+1-1".ToCharArray()
+    |> adds
+    |> printfn "%A"
+
