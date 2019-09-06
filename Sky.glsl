@@ -35,6 +35,22 @@ vec3 Sky(vec2 p)
     return mix(col1,col2,1.0-p.y);
 }
 
+vec3 Sun(vec3 bg,vec2 p,float radio)
+{
+    const vec2 SunPosition = vec2(0.75,0.65);
+    const float SunRadius = 0.05;
+    const float SunEdge = 0.02;
+    const vec3 SunColor = vec3(1.0);
+    
+    vec2 toSun = p - SunPosition;
+    float t = length(vec2(toSun.x*radio,toSun.y));
+    
+    float sun = smoothstep(SunRadius + SunEdge,SunRadius,t);
+    
+    
+    return sun * SunColor + bg + 0.2 * clamp(1.0 - t * 0.8,0.0,1.0) * SunColor;
+}
+
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     // Normalized pixel coordinates (from 0 to 1)
@@ -44,7 +60,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec3 rd = normalize(
         vec3(uv.x,uv.y,1.0) - ro);
     
-    vec3 skyColor = Sky(uv);
+    vec3 skyColor = Sun(Sky(uv),uv,iResolution.x/iResolution.y);
 
     // Time varying pixel color
     vec3 col = vec3(Cloud(skyColor,ro,rd,0.1));
