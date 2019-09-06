@@ -4,7 +4,7 @@ float fbm(vec2 p,float t) {
     float s = 0.5;
     float sum = 0.0;
 
-    for(int i = 0;i < 2;++i) {
+    for(int i = 0;i < 3;++i) {
     	p += vec2(0.0,t);
         t *= 1.5;
         f += s * texture(iChannel0,p / 256.0).x;
@@ -30,8 +30,8 @@ vec3 Cloud(vec3 sky,vec3 ro,vec3 rd,float spd)
 
 vec3 Sky(vec2 p)
 {
-    const vec3 col1 = vec3(0.0,204.0 / 255.0,1.0);
-    const vec3 col2 = vec3(170.0 / 255.0,238.0 / 255.0,1.0);
+    const vec3 col1 = vec3(92.0/255.0,140.0 / 255.0,206.0/255.0);
+    const vec3 col2 = vec3(161.0 / 255.0,209.0 / 255.0,235.0/255.0);
     return mix(col1,col2,1.0-p.y);
 }
 
@@ -47,7 +47,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec3 skyColor = Sky(uv);
 
     // Time varying pixel color
-    vec3 col = vec3(Cloud(skyColor,ro,rd,0.05));
+    vec3 col = vec3(Cloud(skyColor,ro,rd,0.1));
 
     // Output to screen
     fragColor = vec4(col,1.0);
