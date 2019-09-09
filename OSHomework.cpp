@@ -88,6 +88,6 @@ int main(void)
     PCBList ls;
     ls.emplace_front(std::move(pcb));
     
-    cout << AllProcessFinished(ls);
+    RoundRun<100>(ls);
     return 0;
 }
