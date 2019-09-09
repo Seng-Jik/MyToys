@@ -70,8 +70,10 @@ bool AllProcessFinished(PCBList& processes)
 using SchedulingMethod = function<void(PCBList&)>;
 
 template <uint64_t TimeSlice>
-SchedulingMethod RoundRun = []{
-    
+SchedulingMethod RoundRun = [](PCBList& ls){
+    while(!AllProcessFinished(ls))
+        for(auto& pcb:ls)
+            Run(pcb,TimeSlice);
 };
 
 int main(void)
