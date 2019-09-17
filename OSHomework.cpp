@@ -36,7 +36,7 @@ ostream& operator << (ostream& o,const PCB& pcb)
         << "State:" << static_cast<int>(pcb.state) << '\t'
         << "CPUTime:" << pcb.cputime << '\t'
         << "NeedTime:" << pcb.needtime << '\t'
-        << "Count: " << pcb.count << endl;
+        << "Count: " << pcb.count;
     return o;
 }
 
@@ -58,6 +58,10 @@ void Run(PCB& process,uint64_t time)
     
     // Shutdown
     process.state = process.needtime <= 0 ? ProcessState::Finished : ProcessState::Ready;
+    
+    cout<<"Running:"<<process<<" for "<<runningTime<<"ms.";
+    if(process.state == ProcessState::Finished) cout << "Finished." << endl;
+    else cout << endl;
 }
 
 bool AllProcessFinished(PCBList& processes)
@@ -76,18 +80,54 @@ SchedulingMethod RoundRun = [](PCBList& ls){
             Run(pcb,TimeSlice);
 };
 
+template <uint8_t PrioritySub,uint64_t TimeSlice>
+SchedulingMethod PriorityMethod = [](PCBList& ls){
+    while(!AllProcessFinished(ls))
+    {
+        PCB* toRun = nullptr;
+        for(auto& p : ls)
+        {
+            if(p.state != ProcessState::Finished)
+            {
+                if(toRun)
+                {
+                    if(toRun->priority < p.priority)
+                        toRun = &p;
+                }
+                else
+                    toRun = &p;
+            }
+        }
+        Run(*toRun,TimeSlice);
+        toRun->priority -= std::clamp(PrioritySub,static_cast<uint8_t>(0),toRun->priority);
+    }
+};
+
+const auto StaticPriority = PriorityMethod<0u,100u>;
+const auto DynamicPriority = PriorityMethod<3u,100u>;
+
 int main(void)
 {
-    PCB pcb
-    {
-        "super",0,1000
-    };
-    
-    Run(pcb,1500);
-    
     PCBList ls;
-    ls.emplace_front(std::move(pcb));
     
+    for(int i = 0;i < 10;++i)
+        ls.emplace_front("process"+std::to_string(i),rand() % 8,rand() % 500 + 500);
+    
+    cout << "Processes:" << endl;
+    for(auto& p:ls)
+        cout << p << endl;
+    
+    auto ls2 = ls;
+    auto ls3 = ls;
+    
+    cout << "=== Round Run ===" << endl;
     RoundRun<100>(ls);
+    
+    cout << endl << "=== Static Priority === " << endl;
+    StaticPriority(ls2);
+    
+    cout << endl << "=== Dynamic Priority === " << endl;
+    DynamicPriority(ls3);
+    
     return 0;
 }
