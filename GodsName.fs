@@ -22,4 +22,8 @@ let godsName =
     r b 9
     |> Seq.filter condition
 
-printfn "%A" godsName
+let fs = System.IO.File.CreateText "GodsName.txt"
+godsName
+|> Seq.iter (fun name ->
+    fprintfn fs "%s" name
+    printfn "%s" name)
