@@ -1,43 +1,47 @@
 
+let Do x = fun _ -> x
+let inline Zip x = fun a -> x => (fun b -> a,b)
 
 module IOMonad =
     type IO<'a> = 
         private | IO of (unit -> 'a)
         static member (>>=) (IO r,f:'a -> _ IO) = 
             IO (r >> (f >> (fun (IO r) -> r ())))
+        static member (=>) (IO r,f:'a->'b) = 
+            IO (r >> f)
 
     module IO =
         let wrap = IO
-        let map f (IO r) = IO (r >> f)
         let unwrap (IO r) = r ()
         
 
     let readLine = IO.wrap stdin.ReadLine
-    let readInt = readLine |> IO.map int
-    let readFloat = readLine |> IO.map float
+    let readInt = readLine => int
+    let readFloat = readLine => float
 
     let printLine str = IO.wrap (fun () -> stdout.WriteLine (string str))
 
     let action =
         printLine "== IO Monad =="
-        >>= (fun () -> printLine "Input string, int and float:")
-        >>= (fun () -> readLine)
-        >>= (fun str -> readInt |> IO.map (fun x -> str,x))
-        >>= (fun (str,i) -> readFloat |> IO.map (fun x -> str,i,x))
-        >>= (fun x -> printLine (string x))
+        >>= Do (printLine "Input string, int and float:")
+        >>= Do readLine
+        >>= Zip readInt
+        >>= Zip readFloat
+        => string
+        >>= printLine
 
 module StateMonad =
     type State<'a,'s> =
         private | State of ('s -> ('a * 's))
         static member (>>=) (State (a:'s->'a*'s),f:'a->State<'b,'s>) : State<'b,'s> = 
             State (fun s -> let v,state = a s in let (State p) = f v in p state)
+        static member (=>) (State s,f:'a -> 'b) =
+            State (fun state ->
+                let a,state2 = s state
+                f a,state2)
     
     module State =
         let wrap = State
-        let map f (State s) = State (fun state ->
-            let a,state2 = s state
-            f a,state2)
-        let ret = map (fun x -> x)
         let eval a (State s) = s a |> fst
 
     let inc = State.wrap (fun x -> x + 1,x + 1)
@@ -47,19 +51,18 @@ module StateMonad =
 
     let action =
         IOMonad.printLine "== State Monad =="
-        >>= (fun () ->
+        >>= Do (
             inc
-            >>= (fun _ -> inc)
-            >>= (fun _ -> inc)
-            |> State.ret
+            >>= Do inc
+            >>= Do inc
             |> State.eval 0
             |> string
             |> IOMonad.printLine)
-        >>= (fun () ->
+        >>= Do (
             pushStack 1
-            >>= (fun () -> pushStack 2)
-            >>= (fun () -> pushStack 3)
-            >>= (fun () -> popStack ())
+            >>= Do (pushStack 2)
+            >>= Do (pushStack 3)
+            >>= Do (popStack ())
             |> State.eval []
             |> string
             |> (+) "Stack Top:"
@@ -76,9 +79,9 @@ module ErrorMonad =
 
     let action =
         IOMonad.printLine "== Error Monad =="
-        >>= (fun () ->
+        >>= Do (
             OK 1
-            >>= (fun x -> OK (1+x))
+            >>= fun x -> OK (1+x)
             |> string
             |> IOMonad.printLine)
 
@@ -88,17 +91,18 @@ module ReaderMonad =
         private | Reader of  ('src -> 'a)
         static member (>>=) (Reader (r:'src->'a),f:'a->Reader<'b,'src>) : Reader<'b,'src> =
             Reader (fun src -> let (Reader b) = src |> r |> f in b src)
+        static member (=>) (Reader r,f:'a -> 'b) =
+            r >> f |> Reader
 
     module Reader =
         let wrap = Reader
         let eval src (Reader r) = r src
-        let map (f:'a->'b) (Reader r) : Reader<'b,_> = r >> f |> Reader
 
     let action =
         IOMonad.printLine "== Reader Monad =="
-        >>= (fun () ->
+        >>= Do (
             Reader.wrap (fun (x:string) -> x.[0])
-            >>= (fun a -> Reader.wrap (fun (x:string) -> x.[1]) |> Reader.map (fun b -> a,b))
+            >>= Zip (Reader.wrap (fun (x:string) -> x.[1]))
             |> Reader.eval "MO"
             |> string
             |> IOMonad.printLine)
@@ -108,27 +112,27 @@ module WriterMonad =
         | Writer of 'a * 'w
         static member inline (>>=) (Writer (a,w),f:'a->Writer<'b,'w2>) : Writer<'b,'w2> =
             let (Writer (a2,w2)) = f a in Writer (a2,w + w2)
+        static member inline (=>) (Writer (a,b),f:'a -> 'b) =
+            Writer (f a,b)
 
     module Writer =
         let inline wrap v initLog = Writer (v,initLog)
-        let inline map (f:'a -> 'b) (Writer (a,b)) = Writer (f a,b)
         let inline snd (Writer (_,s)) = s
         let inline eval (Writer (a,_)) = a
 
     let action = 
         IOMonad.printLine "== Writer Monad =="
-        >>= (fun () -> 
+        >>= Do (
             Writer.wrap 0 "zero|"
-            >>= (fun x1 -> Writer.wrap 1 "one" |> Writer.map (fun x -> x1,x))
-            |> Writer.map (fun (x1,x2) -> x1,x2)
+            >>= Zip (Writer.wrap 1 "one")
             |> string
             |> IOMonad.printLine)
 
 
 ErrorMonad.action
->>= (fun () -> StateMonad.action)
->>= (fun () -> ReaderMonad.action)
->>= (fun () -> WriterMonad.action)
->>= (fun () -> IOMonad.action)
+>>= Do StateMonad.action
+>>= Do ReaderMonad.action
+>>= Do WriterMonad.action
+>>= Do IOMonad.action
 |> IOMonad.IO.unwrap
 
