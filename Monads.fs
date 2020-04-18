@@ -19,20 +19,12 @@ module IOMonad =
     let printLine str = IO.wrap (fun () -> stdout.WriteLine (string str))
 
     let action =
-        printLine "== Reader Monad =="
-        >>= (fun () ->
-            let read =
-                readLine 
-                >>= (fun str -> 
-                    readInt
-                    >>= (fun i -> 
-                        readFloat |> IO.map 
-                            (fun f -> str,i,f)))
-
-            printLine "Input string, int and float:"
-            >>= (fun () -> 
-                read
-                >>= (fun x -> printLine (string x))))
+        printLine "== IO Monad =="
+        >>= (fun () -> printLine "Input string, int and float:")
+        >>= (fun () -> readLine)
+        >>= (fun str -> readInt |> IO.map (fun x -> str,x))
+        >>= (fun (str,i) -> readFloat |> IO.map (fun x -> str,i,x))
+        >>= (fun x -> printLine (string x))
 
 module StateMonad =
     type State<'a,'s> =
@@ -56,24 +48,22 @@ module StateMonad =
     let action =
         IOMonad.printLine "== State Monad =="
         >>= (fun () ->
-            let state =
-                inc
-                >>= (fun _ ->
-                    inc
-                    >>= (fun _ ->
-                        inc
-                        |> State.ret))
-                |> State.eval 0
-            IOMonad.printLine (string state)
-            >>= (fun () ->
-                let myStack = 
-                    pushStack 1
-                    >>= (fun () -> 
-                        pushStack 2
-                        >>= (fun () -> 
-                            pushStack 3
-                            >>= (fun () -> popStack ())))
-                IOMonad.printLine ("Stack Top:" + (string (State.eval [] myStack)))))
+            inc
+            >>= (fun _ -> inc)
+            >>= (fun _ -> inc)
+            |> State.ret
+            |> State.eval 0
+            |> string
+            |> IOMonad.printLine)
+        >>= (fun () ->
+            pushStack 1
+            >>= (fun () -> pushStack 2)
+            >>= (fun () -> pushStack 3)
+            >>= (fun () -> popStack ())
+            |> State.eval []
+            |> string
+            |> (+) "Stack Top:"
+            |> IOMonad.printLine)
 
 module ErrorMonad =
     type Error<'a,'e> = 
@@ -87,11 +77,10 @@ module ErrorMonad =
     let action =
         IOMonad.printLine "== Error Monad =="
         >>= (fun () ->
-            let err : Error<int,exn> = 
-                OK 1
-                >>= (fun x ->
-                    OK (1+x))
-            IOMonad.printLine (string err))
+            OK 1
+            >>= (fun x -> OK (1+x))
+            |> string
+            |> IOMonad.printLine)
 
 
 module ReaderMonad =
@@ -108,12 +97,11 @@ module ReaderMonad =
     let action =
         IOMonad.printLine "== Reader Monad =="
         >>= (fun () ->
-            let reader = 
-                Reader.wrap (fun (x:string) -> x.[0])
-                >>= (fun a ->
-                    Reader.wrap (fun (x:string) -> x.[1])
-                    |> Reader.map (fun b -> a,b))
-            IOMonad.printLine (string (Reader.eval "MO" reader)))
+            Reader.wrap (fun (x:string) -> x.[0])
+            >>= (fun a -> Reader.wrap (fun (x:string) -> x.[1]) |> Reader.map (fun b -> a,b))
+            |> Reader.eval "MO"
+            |> string
+            |> IOMonad.printLine)
 
 module WriterMonad =
     type Writer<'a,'w when 'w : (static member (+) : 'w*'w -> 'w)> = 
@@ -130,22 +118,17 @@ module WriterMonad =
     let action = 
         IOMonad.printLine "== Writer Monad =="
         >>= (fun () -> 
-            let w = 
-                Writer.wrap 0 "zero|"
-                >>= (fun x1 ->
-                    Writer.wrap 1 "one"
-                    |> Writer.map (fun x2 -> x1,x2))
-            IOMonad.printLine (string w))
+            Writer.wrap 0 "zero|"
+            >>= (fun x1 -> Writer.wrap 1 "one" |> Writer.map (fun x -> x1,x))
+            |> Writer.map (fun (x1,x2) -> x1,x2)
+            |> string
+            |> IOMonad.printLine)
 
 
 ErrorMonad.action
->>= (fun () ->
-    StateMonad.action
-    >>= (fun () ->
-        ReaderMonad.action
-        >>= (fun () ->
-            WriterMonad.action)
-            >>= (fun () ->
-                IOMonad.action)))
+>>= (fun () -> StateMonad.action)
+>>= (fun () -> ReaderMonad.action)
+>>= (fun () -> WriterMonad.action)
+>>= (fun () -> IOMonad.action)
 |> IOMonad.IO.unwrap
 
