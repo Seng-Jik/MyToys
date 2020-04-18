@@ -1,4 +1,5 @@
 
+
 module IOMonad =
     type IO<'a> = 
         private | IO of (unit -> 'a)
@@ -37,10 +38,7 @@ module StateMonad =
     type State<'a,'s> =
         private | State of ('s -> ('a * 's))
         static member (>>=) (State (a:'s->'a*'s),f:'a->State<'b,'s>) : State<'b,'s> = 
-            State (fun s ->
-                let v,state = a s
-                let (State p) = f v
-                p state)
+            State (fun s -> let v,state = a s in let (State p) = f v in p state)
     
     module State =
         let wrap = State
@@ -96,13 +94,58 @@ module ErrorMonad =
             IOMonad.printLine (string err))
 
 
+module ReaderMonad =
+    type Reader<'a,'src> = 
+        private | Reader of  ('src -> 'a)
+        static member (>>=) (Reader (r:'src->'a),f:'a->Reader<'b,'src>) : Reader<'b,'src> =
+            Reader (fun src -> let (Reader b) = src |> r |> f in b src)
 
-// Reader Monad
-// Writer Monad
+    module Reader =
+        let wrap = Reader
+        let eval src (Reader r) = r src
+        let map (f:'a->'b) (Reader r) : Reader<'b,_> = r >> f |> Reader
+
+    let action =
+        IOMonad.printLine "== Reader Monad =="
+        >>= (fun () ->
+            let reader = 
+                Reader.wrap (fun (x:string) -> x.[0])
+                >>= (fun a ->
+                    Reader.wrap (fun (x:string) -> x.[1])
+                    |> Reader.map (fun b -> a,b))
+            IOMonad.printLine (string (Reader.eval "MO" reader)))
+
+module WriterMonad =
+    type Writer<'a,'w when 'w : (static member (+) : 'w*'w -> 'w)> = 
+        | Writer of 'a * 'w
+        static member inline (>>=) (Writer (a,w),f:'a->Writer<'b,'w2>) : Writer<'b,'w2> =
+            let (Writer (a2,w2)) = f a in Writer (a2,w + w2)
+
+    module Writer =
+        let inline wrap v initLog = Writer (v,initLog)
+        let inline map (f:'a -> 'b) (Writer (a,b)) = Writer (f a,b)
+        let inline snd (Writer (_,s)) = s
+        let inline eval (Writer (a,_)) = a
+
+    let action = 
+        IOMonad.printLine "== Writer Monad =="
+        >>= (fun () -> 
+            let w = 
+                Writer.wrap 0 "zero|"
+                >>= (fun x1 ->
+                    Writer.wrap 1 "one"
+                    |> Writer.map (fun x2 -> x1,x2))
+            IOMonad.printLine (string w))
+
 
 ErrorMonad.action
 >>= (fun () ->
     StateMonad.action
     >>= (fun () ->
-        IOMonad.action))
+        ReaderMonad.action
+        >>= (fun () ->
+            WriterMonad.action)
+            >>= (fun () ->
+                IOMonad.action)))
 |> IOMonad.IO.unwrap
+
