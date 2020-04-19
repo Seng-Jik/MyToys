@@ -13,7 +13,13 @@ module IOMonad =
     module IO =
         let wrap = IO
         let unwrap (IO r) = r ()
+
+        type IOBuilder () =
+            member _.Bind (a:'a IO,f) = a >>= f
+            member _.Zero () = IO ignore
         
+        
+    let io = IO.IOBuilder ()
 
     let readLine = IO.wrap stdin.ReadLine
     let readInt = readLine => int
@@ -30,6 +36,17 @@ module IOMonad =
         => string
         >>= printLine
 
+    let actionByComputationExpression =
+        io {
+            do! printLine "== IOMonad =="
+            do! printLine "Input string, int and float:"
+            let! line = readLine
+            let! i = readInt
+            let! f = readFloat
+            let r = (line,i),f
+            do! printLine (string r)
+        }
+
 module StateMonad =
     type State<'a,'s> =
         private | State of ('s -> ('a * 's))
@@ -43,6 +60,13 @@ module StateMonad =
     module State =
         let wrap = State
         let eval a (State s) = s a |> fst
+
+        type StateBuilder () =
+            member _.Bind (a:State<_,_>,f) = a >>= f
+            member _.Zero () = State (fun x -> x,x)
+            member _.Return x = x
+    
+    let state = State.StateBuilder ()
 
     let inc = State.wrap (fun x -> x + 1,x + 1)
     let pushStack (value:'a) = State.wrap (fun (stack:'a list) -> (),value::stack)
@@ -68,6 +92,33 @@ module StateMonad =
             |> (+) "Stack Top:"
             |> IOMonad.printLine)
 
+    open IOMonad
+    let actionWithComputationExpression =
+        io {
+            do! printLine "== State Monad =="
+            do!
+                state {
+                    let! _ = inc
+                    let! _ = inc
+                    let! _ = inc
+                    ()
+                }
+                |> State.eval 0
+                |> string
+                |> printLine
+
+            do!
+                state {
+                    let! _ = pushStack 2
+                    let! _ = pushStack 3
+                    return popStack ()
+                }
+                |> State.eval []
+                |> string
+                |> (+) "Stack Top:"
+                |> IOMonad.printLine
+        }
+
 module ErrorMonad =
     type Error<'a,'e> = 
         | OK of 'a
@@ -77,6 +128,12 @@ module ErrorMonad =
             | OK a -> f a
             | Err e -> Err e
 
+    type ErrorBuilder () =
+        member _.Bind (a:Error<'a,'e>,f) = a >>= f
+        member _.Return x = x
+
+    let error = ErrorBuilder ()
+
     let action =
         IOMonad.printLine "== Error Monad =="
         >>= Do (
@@ -84,6 +141,33 @@ module ErrorMonad =
             >>= fun x -> OK (1+x)
             |> string
             |> IOMonad.printLine)
+        >>= Do(
+            OK 1
+            >>= fun _ -> Err 0
+            |> string
+            |> IOMonad.printLine)
+
+    open IOMonad
+    let actionWithComputationExpression =
+        io {
+            do! printLine "== Error Monad =="
+            do!
+                error {
+                    let! x = OK 1
+                    return OK (x + 1)
+                }
+                |> string
+                |> printLine
+            do! 
+                error {
+                    let! _ = OK 1
+                    let! y = Err 0
+                    let z = y + 1
+                    return OK z
+                }
+                |> string
+                |> printLine
+        }
 
 
 module ReaderMonad =
@@ -98,6 +182,11 @@ module ReaderMonad =
         let wrap = Reader
         let eval src (Reader r) = r src
 
+        type ReaderBuilder () =
+            member _.Bind (a:Reader<_,_>,f) = a >>= f
+            member _.Return x = x
+    let reader = Reader.ReaderBuilder ()
+
     let action =
         IOMonad.printLine "== Reader Monad =="
         >>= Do (
@@ -106,6 +195,21 @@ module ReaderMonad =
             |> Reader.eval "MO"
             |> string
             |> IOMonad.printLine)
+
+    open IOMonad
+    let actionWithComputationExpression =
+        io {
+            do! printLine "== Reader Monad =="
+            do!
+                reader {
+                    let! a = Reader.wrap (fun (x:string) -> x.[0])
+                    let! b = Reader.wrap (fun (x:string) -> x.[1])
+                    return Reader.wrap (fun _ -> a,b)
+                }
+                |> Reader.eval "MO"
+                |> string
+                |> IOMonad.printLine
+        }
 
 module WriterMonad =
     type Writer<'a,'w when 'w : (static member (+) : 'w*'w -> 'w)> = 
@@ -120,6 +224,11 @@ module WriterMonad =
         let inline snd (Writer (_,s)) = s
         let inline eval (Writer (a,_)) = a
 
+        type WriterBuilder () =
+            member _.Bind (a:Writer<_,_>,f) = a >>= f
+            member _.Return x = x
+    let writer = Writer.WriterBuilder ()
+
     let action = 
         IOMonad.printLine "== Writer Monad =="
         >>= Do (
@@ -128,11 +237,35 @@ module WriterMonad =
             |> string
             |> IOMonad.printLine)
 
+    open IOMonad
+    let actionWithComputationExpression =
+        io {
+            do! printLine "== Writer Monad =="
+            do!
+                writer {
+                    let! x = Writer.wrap 0 "zero|"
+                    return Writer.wrap (x,1) "one"
+                }
+                |> string
+                |> IOMonad.printLine
+        }
 
-ErrorMonad.action
+
+IOMonad.printLine "======== Monad Directly ========"
+>>= Do ErrorMonad.action
 >>= Do StateMonad.action
 >>= Do ReaderMonad.action
 >>= Do WriterMonad.action
 >>= Do IOMonad.action
+
+>>= Do (IOMonad.printLine "")
+>>= Do (IOMonad.printLine "======== Monad With Computation Expression ========")
+>>= Do ErrorMonad.actionWithComputationExpression
+>>= Do StateMonad.actionWithComputationExpression
+>>= Do ReaderMonad.actionWithComputationExpression
+>>= Do WriterMonad.actionWithComputationExpression
+>>= Do IOMonad.actionByComputationExpression
+
 |> IOMonad.IO.unwrap
+
 
