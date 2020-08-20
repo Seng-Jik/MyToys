@@ -1,0 +1,43 @@
+
+float Square(float t)
+	return t * t
+
+
+// 这堆class定义可能都是废话
+class object
+	float getTime() extern
+
+class enemy : object
+	float speed = 0			// 定义变量
+	float angle = 0
+	float kill() extern		// 从宿主端定义的成员函数
+	float tick()			// 从DmsLL定义的成员函数
+		print("tick!")
+	float print(float t)
+		print(t)
+	action kill()			// 额外定义的动作
+	action born()
+	action when(bool condition)		// 额外定义的动作，并且此动作具有一个参数
+	action once(bool condition)
+	action time(range<float> timeSpan)[float t interpolation]	// 额外定义一个动作，并为此动作的作用域传入参数t
+
+module Stage1
+	enemy enemy1
+		int something = 0	// 额外定义变量
+		time(1.0~3.5)		// 在1.0到3.5之间发生的事件
+			speed -> 15
+			angle -> 20
+		time(3.5~4.0)		// 发生事件
+			speed -> 20 (Square)	// 使用Square函数进行插值
+			angle -> 5 (Suqare)
+			print(Square(time))
+		once(something = 0)	// 一旦条件成立，则执行一次
+			speed = 0
+		when(something = 0)	// 当条件成立时总是执行
+			angle = 0
+		kill				// 额外定义的动作
+			print "killed"
+		float getSpeed()		// 定义对象成员函数
+			return speed
+			
+		
