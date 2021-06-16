@@ -146,7 +146,7 @@ void print_system(const system_t* sys) {
     for (i = 0; i < sys->process_count; ++i) {
         size_t j;
         const process_t* proc = &sys->processes[i];
-        printf("%d\t", proc->pid);
+        printf("%lu\t", proc->pid);
         
         for (j = 0; j < RES_TYPES; ++j)
             printf("%d ", proc->max[j]);
@@ -208,9 +208,9 @@ int main() {
         size_t i;
         print_system(&current_system);
         printf("Which process will allocate the resource? Input the PID: ");
-        scanf("%u", &need.pid);
+        scanf("%lu", &need.pid);
         for (i = 0; i < RES_TYPES; ++i) {
-            printf("Input the allocate count of the resource %u: ", i);
+            printf("Input the allocate count of the resource %lu: ", i);
             scanf("%u", &need.current_need[i]);
         }
 
